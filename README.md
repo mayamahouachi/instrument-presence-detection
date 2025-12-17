@@ -49,6 +49,17 @@ conda env create -f environment.yaml -n music-sep
 conda activate myenv
 ```
 
+#### Development workspace
+
+Enable the pre-commit analyses
+
+```sh
+# run this once in your repository
+# inside your virtual environment
+pip install pre-commit
+pre-commit install
+```
+
 ## How to run
 
 Train model with default configuration
