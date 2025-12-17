@@ -23,7 +23,7 @@ An experimental project about AI model for music source instant detection.
 git clone https://github.com/Convolutio/music-source-sep-structured
 cd music-source-sep-structured
 
-# [OPTIONAL] create conda environment
+# [OPTIONAL] create conda/mamba environment
 conda create -n music-sep python=3.13
 conda activate music-sep
 
@@ -35,18 +35,19 @@ conda activate music-sep
 pip install -r requirements.txt
 ```
 
-#### Conda
+#### Conda/Mamba
 
 ```bash
 # clone project
 git clone https://github.com/Convolutio/music-source-sep-structured
 cd music-source-sep-structured
 
-# create conda environment and install dependencies
-conda env create -f environment.yaml -n music-sep
+# create conda/mamba environment and install dependencies
+# (mamba is faster)
+mamba env create -f environment.yaml -n music-sep
 
 # activate conda environment
-conda activate myenv
+mamba activate music-sep
 ```
 
 #### Development workspace
