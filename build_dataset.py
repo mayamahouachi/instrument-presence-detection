@@ -1,53 +1,70 @@
-#build_dataset.py
-"""
-Build a segment-level multi-label instrument-presence dataset from MUSDB18  (.stem.mp4).
+# build_dataset.py
+"""Build a segment-level multi-label instrument-presence dataset from MUSDB18  (.stem.mp4).
 
 Output per track:
   - X: (N, n_mels, frames) float32  -> log-mel spectrogram of MIX windows
-  - Y: (N, 4) int8                 -> [vocals, drums, bass, other] presence labels per window
-  - T: (N,) float32                -> window start times (seconds)
+  - Y: (N, 4) int8                  -> [vocals, drums, bass, other] presence labels per window
+  - T: (N,) float32                 -> window start times (seconds)
 
  python build_dataset.py `
->>   --musdb-root "C:\Users\mayam\OneDrive\Documents\3A\IA Musical\projet\musdb18" `
+>>   --musdb-root "/path/to/directory/musdb18" `
 >>   --out-dir "prepared_musdb18" `
 >>   --sr 22050 --win-sec 1.0 --hop-sec 0.5 `
 >>   --n-mels 64 --ratio-thr 0.05
-
 """
 from __future__ import annotations
+
 import argparse
 from pathlib import Path
-import numpy as np
-import librosa
-from tqdm import tqdm
 
+import librosa
 import musdb
+import numpy as np
+from tqdm import tqdm
 
 STEMS = ["vocals", "drums", "bass", "other"]
 
 
 def to_mono(x: np.ndarray) -> np.ndarray:
+    """Convert the multi-channel signal into a signal with one channel."""
     x = np.asarray(x)
     if x.ndim == 1:
         return x.astype(np.float32)
-    if x.shape[0] <= 4 and x.shape[1] > 1000: # (channels, samples)
-        x = x.T   # (samples,channels)
-    return x.mean(axis=1).astype(np.float32) # (samples,)
+    if x.shape[0] <= 4 and x.shape[1] > 1000:  # (channels, samples)
+        x = x.T  # (samples,channels)
+    return x.mean(axis=1).astype(np.float32)  # (samples,)
+
 
 def rms(x: np.ndarray) -> float:
+    """RMS Conversion."""
     x = np.asarray(x, dtype=np.float32)
     return float(np.sqrt(np.mean(x * x, dtype=np.float64) + 1e-12))
 
 
 def logmel(y: np.ndarray, sr: int, n_fft: int, hop_length: int, n_mels: int) -> np.ndarray:
-    S = librosa.feature.melspectrogram(y=y, sr=sr, n_fft=n_fft, hop_length=hop_length, n_mels=n_mels, power=2.0)
-    return librosa.power_to_db(S, ref=np.max).astype(np.float32) # (n_mels, frames) log scale
+    """Return the mel spectogram.
+
+    See the course or the librosa documentation.
+    """
+    S = librosa.feature.melspectrogram(
+        y=y, sr=sr, n_fft=n_fft, hop_length=hop_length, n_mels=n_mels, power=2.0
+    )
+    return librosa.power_to_db(S, ref=np.max).astype(np.float32)  # (n_mels, frames) log scale
 
 
-def build_track_npz(track,out_path: Path,sr: int,win_sec: float,hop_sec: float,n_fft: int,mel_hop: int,n_mels: int,ratio_thr: float,min_mix_rms: float) -> dict:
-    """
-    Return stats dict about windows saved.
-    """
+def build_track_npz(
+    track,
+    out_path: Path,
+    sr: int,
+    win_sec: float,
+    hop_sec: float,
+    n_fft: int,
+    mel_hop: int,
+    n_mels: int,
+    ratio_thr: float,
+    min_mix_rms: float,
+) -> dict:
+    """Return stats dict about windows saved."""
     mix = to_mono(track.audio)
     stems = {name: to_mono(track.targets[name].audio) for name in STEMS}
 
@@ -78,7 +95,9 @@ def build_track_npz(track,out_path: Path,sr: int,win_sec: float,hop_sec: float,n
             # relative energy criterion
             present = 1 if (r / (mix_r + 1e-12)) >= ratio_thr else 0
             y.append(present)
-        feat = logmel(mix_w, sr=sr, n_fft=n_fft, hop_length=mel_hop, n_mels=n_mels) #(n_mels, frames)
+        feat = logmel(
+            mix_w, sr=sr, n_fft=n_fft, hop_length=mel_hop, n_mels=n_mels
+        )  # (n_mels, frames)
         X_list.append(feat)
         Y_list.append(y)
         T_list.append(start / sr)
@@ -92,13 +111,32 @@ def build_track_npz(track,out_path: Path,sr: int,win_sec: float,hop_sec: float,n
     T = np.array(T_list, dtype=np.float32)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(out_path,X=X,Y=Y,T=T,sr=np.int32(sr),win_sec=np.float32(win_sec),
-        hop_sec=np.float32(hop_sec),n_fft=np.int32(n_fft),mel_hop=np.int32(mel_hop),n_mels=np.int32(n_mels),
-        ratio_thr=np.float32(ratio_thr),min_mix_rms=np.float32(min_mix_rms),track_name=str(track.name))
-    return {"saved": True,"total_windows": total_windows,"kept_windows": kept_windows,"X_shape": tuple(X.shape),"Y_shape": tuple(Y.shape)}
+    np.savez_compressed(
+        out_path,
+        X=X,
+        Y=Y,
+        T=T,
+        sr=np.int32(sr),
+        win_sec=np.float32(win_sec),
+        hop_sec=np.float32(hop_sec),
+        n_fft=np.int32(n_fft),
+        mel_hop=np.int32(mel_hop),
+        n_mels=np.int32(n_mels),
+        ratio_thr=np.float32(ratio_thr),
+        min_mix_rms=np.float32(min_mix_rms),
+        track_name=str(track.name),
+    )
+    return {
+        "saved": True,
+        "total_windows": total_windows,
+        "kept_windows": kept_windows,
+        "X_shape": tuple(X.shape),
+        "Y_shape": tuple(Y.shape),
+    }
 
 
 def sanity_report(npz_files: list[Path]) -> None:
+    """Log the presence rate of each stem over the batch of audio files."""
     if not npz_files:
         print("No files found ")
         return
@@ -116,8 +154,14 @@ def sanity_report(npz_files: list[Path]) -> None:
 
 
 def main():
+    """Dataset builder CLI entrypoint."""
     p = argparse.ArgumentParser()
-    p.add_argument("--musdb-root", type=str, required=True, help="Path to musdb18 folder containing train/ and test/")
+    p.add_argument(
+        "--musdb-root",
+        type=str,
+        required=True,
+        help="Path to musdb18 folder containing train/ and test/",
+    )
     p.add_argument("--out-dir", type=str, default="prepared_musdb18", help="Output folder")
     p.add_argument("--sr", type=int, default=22050)
     p.add_argument("--win-sec", type=float, default=1.0)
@@ -143,8 +187,18 @@ def main():
         for track in tqdm(db, desc=f"Processing {subset}", unit="track"):
             safe_name = track.name.replace("/", "_").replace("\\", "_")
             out_path = subset_out / f"{safe_name}.npz"
-            stats = build_track_npz(track=track,out_path=out_path,sr=args.sr,win_sec=args.win_sec,hop_sec=args.hop_sec,
-                n_fft=args.n_fft,mel_hop=args.mel_hop,n_mels=args.n_mels,ratio_thr=args.ratio_thr,min_mix_rms=args.min_mix_rms)
+            stats = build_track_npz(
+                track=track,
+                out_path=out_path,
+                sr=args.sr,
+                win_sec=args.win_sec,
+                hop_sec=args.hop_sec,
+                n_fft=args.n_fft,
+                mel_hop=args.mel_hop,
+                n_mels=args.n_mels,
+                ratio_thr=args.ratio_thr,
+                min_mix_rms=args.min_mix_rms,
+            )
             if stats["saved"]:
                 saved += 1
                 tot_kept += stats["kept_windows"]
@@ -158,5 +212,7 @@ def main():
         npz_files = list(subset_out.glob("*.npz"))
         sanity_report(npz_files)
     print(f" Output in: {out_dir.resolve()}")
+
+
 if __name__ == "__main__":
     main()

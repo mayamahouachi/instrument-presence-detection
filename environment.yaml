@@ -21,7 +21,7 @@ channels:
 # compatibility is usually guaranteed
 
 dependencies:
-  - python=3.13
+  - python=3.8
   - pytorch=2.*
   - torchvision=0.*
   - lightning=2.*
@@ -30,6 +30,8 @@ dependencies:
   - rich=13.*
   - pre-commit=3.*
   - pytest=7.*
+  - librosa
+  - musdb
 
   # --------- loggers --------- #
   # - wandb
