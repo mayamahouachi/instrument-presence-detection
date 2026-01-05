@@ -16,7 +16,7 @@ An experimental project about AI model for music source instant detection.
 
 ## Installation
 
-#### Pip
+### Pip
 
 ```bash
 # clone project
@@ -35,7 +35,7 @@ conda activate music-sep
 pip install -r requirements.txt
 ```
 
-#### Conda/Mamba
+### Conda/Mamba
 
 ```bash
 # clone project
@@ -50,7 +50,7 @@ mamba env create -f environment.yaml -n music-sep
 mamba activate music-sep
 ```
 
-#### Development workspace
+### Development workspace
 
 Enable the pre-commit analyses
 
@@ -60,6 +60,19 @@ Enable the pre-commit analyses
 pip install pre-commit
 pre-commit install
 ```
+
+### Install the dataset
+
+1. Be sure to have two directories `train` and `test` with `.stem.mp4` files
+   (the raw MUSDB18) in `./data/MUSDB18/raw/`
+
+2. In your environment, run the `build-dataset.py` script:
+
+   ```sh
+   python build_dataset.py --musdb-root ./data/MUSDB18/raw/ \
+    --out-dir ./data/MUSDB18/prepared/ --sr 22050 --win-sec 1.0 --hop-sec 0.5 \
+    --n-mels 64 --ratio-thr 0.0
+   ```
 
 ## How to run
 
