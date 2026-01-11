@@ -32,7 +32,7 @@ class MUSDB18Dataset(Dataset[Tuple[Tensor, Tensor]]):
 
         def get_from_file(file: Path):
             data = PreparedAudio(**np.load(file))
-            return data.X, data.T
+            return data.X, data.Y
 
         self.ready_data = lambda: cast(
             Tuple[Tuple[NDArray, ...], Tuple[NDArray, ...]],
@@ -43,6 +43,9 @@ class MUSDB18Dataset(Dataset[Tuple[Tensor, Tensor]]):
         self.transforms = transforms
         self.target_transforms = target_transforms
 
+    def _encode_target(self, target: NDArray[np.bool_]) -> NDArray[np.int_]:
+        return (target * (2 ** np.arange(3))[np.newaxis, ...]).sum(axis=1)
+
     def split_with_same_distribution(
         self, train_size: int, test_size: int
     ) -> Tuple[Subset[Tuple[Tensor, Tensor]], Subset[Tuple[Tensor, Tensor]]]:
@@ -52,7 +55,10 @@ class MUSDB18Dataset(Dataset[Tuple[Tensor, Tensor]]):
         """
         self.subsample(train_size + test_size)
         train_indices, test_indices = sampling.split_with_same_distribution(
-            cast(NDArray, self.target_data), train_size, test_size, self.seed
+            self._encode_target(cast(NDArray, self.target_data)),
+            train_size,
+            test_size,
+            self.seed,
         )
         return Subset(self, train_indices.tolist()), Subset(self, test_indices.tolist())
 
@@ -65,7 +71,11 @@ class MUSDB18Dataset(Dataset[Tuple[Tensor, Tensor]]):
 
         def gen(inpts: Tuple[NDArray, ...], targets: Tuple[NDArray, ...]):
             for inpts_per_file, targets_per_file in zip(inpts, targets):
-                indices = sampling.undersample(targets_per_file, sample_nb_per_music, self.seed)
+                indices = sampling.undersample(
+                    self._encode_target(targets_per_file),
+                    sample_nb_per_music,
+                    self.seed,
+                )
                 yield inpts_per_file[indices], targets_per_file[indices]
 
         inpts, targets = zip(*gen(inpts, targets))

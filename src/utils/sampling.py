@@ -39,9 +39,9 @@ def balance(targets: NDArray[np.int_], seed: int):
 
     :param targets: shape (B,)
     :param seed: the sampling seed
-    :return: shape (U,), with U the undersampled dataset size
+    :return: shape (U,), with U the undersampled dataset size, and the number of classes
     """
-    classes, counts = np.unique(targets)
+    classes, counts = np.unique(targets, return_counts=True)
     min_count = cast(int, counts.min())
     indices = np.concatenate(
         [
@@ -51,7 +51,7 @@ def balance(targets: NDArray[np.int_], seed: int):
             for c in classes
         ]
     )
-    return indices
+    return indices, len(classes)
 
 
 def undersample(y: NDArray[np.int_], subset_size: int, seed: int) -> NDArray[np.int_]:
@@ -64,11 +64,11 @@ def undersample(y: NDArray[np.int_], subset_size: int, seed: int) -> NDArray[np.
     """
     if len(y) <= subset_size:
         return y
-    balanced_subset = balance(y, seed)
+    balanced_subset, num_classes = balance(y, seed)
     if len(balanced_subset) == subset_size:
         return balanced_subset
     if len(balanced_subset) > subset_size:
-        return split_with_same_distribution(balanced_subset, subset_size, 0, seed)[0]
+        return split_with_same_distribution(y[balanced_subset], subset_size, num_classes, seed)[0]
     # undersample in a subset with at least one class less
     mask = np.ones(len(y), dtype=bool)
     mask[balanced_subset] = False
