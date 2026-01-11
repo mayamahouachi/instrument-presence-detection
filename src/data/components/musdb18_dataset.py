@@ -17,8 +17,8 @@ class MUSDB18Dataset(Dataset[Tuple[Tensor, Tensor]]):
         files = data_dir.iterdir()
 
         def get_from_file(file: Path):
-            data: PreparedAudio = np.load(file)
-            return data["X"], data["T"]
+            data = PreparedAudio(**np.load(file))
+            return data.X, data.T
 
         inpts, targets = cast(
             Tuple[Tuple[NDArray, ...], Tuple[NDArray, ...]],

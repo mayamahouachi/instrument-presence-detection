@@ -20,6 +20,7 @@ python build_dataset.py \
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict
 from pathlib import Path
 from typing import Iterable, cast
 
@@ -27,6 +28,8 @@ import librosa
 import musdb
 import numpy as np
 from tqdm import tqdm
+
+from src.data.components.data_type import PreparedAudio
 
 STEMS = ["vocals", "drums", "bass"]
 
@@ -72,7 +75,10 @@ def build_track_npz(
     stem_abs_thr: float,
     compress: bool,
 ) -> dict:
-    """Return stats dict about windows saved."""
+    """Compute for each file the audio spectrum windows and save them.
+
+    Return stats dict about saved audio spectrum window.
+    """
     mix = to_mono(track.audio)
     stems = {name: to_mono(track.targets[name].audio) for name in STEMS}
 
@@ -124,7 +130,7 @@ def build_track_npz(
     T = np.array(T_list, dtype=np.float32)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = dict(
+    payload = PreparedAudio(
         X=X,
         Y=Y,
         T=T,
@@ -142,9 +148,9 @@ def build_track_npz(
         track_name=str(track.name),
     )
     if compress:
-        np.savez_compressed(out_path, **payload)
+        np.savez_compressed(out_path, **asdict(payload))
     else:
-        np.savez(out_path, **payload)
+        np.savez(out_path, **asdict(payload))
     return {
         "saved": True,
         "total_windows": total_windows,

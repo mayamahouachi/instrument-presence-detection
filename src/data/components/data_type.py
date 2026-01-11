@@ -1,19 +1,23 @@
-from typing import TypedDict
+from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
 
 
-class PreparedAudio(TypedDict):
+@dataclass
+class PreparedAudio:
     X: NDArray
     Y: NDArray
     T: NDArray
-    sr: NDArray[np.int32]
-    win_sec: NDArray[np.float32]
-    hop_sec: NDArray[np.float32]
-    n_fft: NDArray[np.int32]
-    mel_hop: NDArray[np.int32]
-    n_mels: NDArray[np.int32]
-    ratio_thr: NDArray[np.float32]
-    min_mix_rms: NDArray[np.float32]
+    sr: int
+    win_sec: float
+    hop_sec: float
+    n_fft: int
+    mel_hop: int
+    n_mels: int
+    stem_abs_thr: float
+    ratio_thr_vocals: float
+    ratio_thr_drums: float
+    ratio_thr_bass: float
+    min_mix_rms: float
     track_name: str
