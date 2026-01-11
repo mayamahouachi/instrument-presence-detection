@@ -1,4 +1,3 @@
-# build_dataset.py
 """Build a segment-level multi-label instrument-presence dataset from MUSDB18  (.stem.mp4).
 
 Output per track:
@@ -9,14 +8,15 @@ Output per track:
 python build_dataset.py \
   --musdb-root "/path/to/musdb18" \
   --out-dir "prepared_musdb18" \
->>   --sr 22050 --win-sec 1.0 --hop-sec 0.5 `
->>   --n-mels 64 --n-fft 1024 --mel-hop 256 `
->>   --ratio-thr-vocals 0.07 `
->>   --ratio-thr-drums 0.12 `
->>   --ratio-thr-bass 0.12 `
->>   --min-mix-rms 1e-4 `
->>   --stem-abs-thr 1e-3
+    --sr 22050 --win-sec 1.0 --hop-sec 0.5 \
+    --n-mels 64 --n-fft 1024 --mel-hop 256 \
+    --ratio-thr-vocals 0.07 \
+    --ratio-thr-drums 0.12 \
+    --ratio-thr-bass 0.12 \
+    --min-mix-rms 1e-4 \
+    --stem-abs-thr 1e-3
 """
+
 from __future__ import annotations
 
 import argparse

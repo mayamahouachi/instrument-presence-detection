@@ -1,10 +1,8 @@
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, cast
 
-import torch
 from lightning import LightningDataModule
-from torch.utils.data import ConcatDataset, DataLoader, Dataset, random_split
-from torchvision.datasets import MNIST
+from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import transforms
 
 from src.data.components.musdb18_dataset import MUSDB18Dataset
@@ -51,7 +49,7 @@ class MUSDB18DataModule(LightningDataModule):
     def __init__(
         self,
         data_dir: str = "data/MUSDB18/prepared",
-        train_val_split: Tuple[int, int] = (55_000, 5_000),
+        train_val_test_split: Tuple[int, int, int] = (55_000, 5_000, 20_000),
         batch_size: int = 64,
         num_workers: int = 0,
         pin_memory: bool = False,
@@ -59,7 +57,7 @@ class MUSDB18DataModule(LightningDataModule):
         """Initialize a `MUSDB18DataModule`.
 
         :param data_dir: The data directory. Defaults to `"data/MUSDB18/prepared/"`.
-        :param train_val_split: The train and validation split. Defaults to `(55_000, 5_000)`.
+        :param train_val_test_split: The train, validation and test sample numbers. Defaults to `(55_000, 5_000, 20_000)`.
         :param batch_size: The batch size. Defaults to `64`.
         :param num_workers: The number of workers. Defaults to `0`.
         :param pin_memory: Whether to pin memory. Defaults to `False`.
@@ -74,6 +72,7 @@ class MUSDB18DataModule(LightningDataModule):
         self.transforms = transforms.Compose(
             [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
         )
+        self.target_transforms = transforms.Compose([transforms.ToTensor()])
 
         self.data_train: Optional[Dataset] = None
         self.data_val: Optional[Dataset] = None
@@ -97,8 +96,7 @@ class MUSDB18DataModule(LightningDataModule):
 
         Do not use it to assign state (self.x = y).
         """
-        MNIST(self.hparams.data_dir, train=True, download=True)
-        MNIST(self.hparams.data_dir, train=False, download=True)
+        pass
 
     def setup(self, stage: Optional[str] = None) -> None:
         """Load data. Set variables: `self.data_train`, `self.data_val`, `self.data_test`.
@@ -112,28 +110,30 @@ class MUSDB18DataModule(LightningDataModule):
         """
         # Divide batch size by the number of devices.
         if self.trainer is not None:
-            if self.hparams.batch_size % self.trainer.world_size != 0:
+            if self.hparams["batch_size"] % self.trainer.world_size != 0:
                 raise RuntimeError(
-                    f"Batch size ({self.hparams.batch_size}) is not divisible by the number of devices ({self.trainer.world_size})."
+                    f"Batch size ({self.hparams['batch_size']}) is not divisible by the number of devices ({self.trainer.world_size})."
                 )
-            self.batch_size_per_device = self.hparams.batch_size // self.trainer.world_size
+            self.batch_size_per_device = self.hparams["batch_size"] // self.trainer.world_size
 
         # load and split datasets only if not loaded already
         if not self.data_train and not self.data_val and not self.data_test:
             trainset = MUSDB18Dataset(
-                Path(self.hparams.data_dir), train=True, transform=self.transforms
+                Path(self.hparams["data_dir"]),
+                train=True,
+                transforms=self.transforms,
+                target_transforms=self.target_transforms,
             )
             testset = MUSDB18Dataset(
-                Path(self.hparams.data_dir), train=False, transform=self.transforms
+                Path(self.hparams["data_dir"]),
+                train=False,
+                transforms=self.transforms,
+                target_transforms=self.target_transforms,
             )
-            dataset = ConcatDataset(datasets=[trainset, testset])
-            self.data_train, self.data_val = random_split(
-                dataset=dataset,
-                lengths=self.hparams.train_val_test_split,
-                generator=torch.Generator().manual_seed(42),
+            self.data_train, self.data_val = trainset.split_with_same_distribution(
+                *self.hparams["train_val_test_split"][:2],
             )
-            # TODO: take a subset
-            self.data_test = testset
+            self.data_test = testset.subsample(self.hparams["train_val_test_split"][2])
 
     def train_dataloader(self) -> DataLoader[Any]:
         """Create and return the train dataloader.
@@ -141,10 +141,10 @@ class MUSDB18DataModule(LightningDataModule):
         :return: The train dataloader.
         """
         return DataLoader(
-            dataset=self.data_train,
+            dataset=cast(Dataset, self.data_train),
             batch_size=self.batch_size_per_device,
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
+            num_workers=self.hparams["num_workers"],
+            pin_memory=self.hparams["pin_memory"],
             shuffle=True,
         )
 
@@ -154,10 +154,10 @@ class MUSDB18DataModule(LightningDataModule):
         :return: The validation dataloader.
         """
         return DataLoader(
-            dataset=self.data_val,
+            dataset=cast(Dataset, self.data_val),
             batch_size=self.batch_size_per_device,
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
+            num_workers=self.hparams["num_workers"],
+            pin_memory=self.hparams["pin_memory"],
             shuffle=False,
         )
 
@@ -167,10 +167,10 @@ class MUSDB18DataModule(LightningDataModule):
         :return: The test dataloader.
         """
         return DataLoader(
-            dataset=self.data_test,
+            dataset=cast(Dataset, self.data_test),
             batch_size=self.batch_size_per_device,
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
+            num_workers=self.hparams["num_workers"],
+            pin_memory=self.hparams["pin_memory"],
             shuffle=False,
         )
 
