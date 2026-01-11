@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 import torch
@@ -5,6 +6,8 @@ from lightning import LightningDataModule
 from torch.utils.data import ConcatDataset, DataLoader, Dataset, random_split
 from torchvision.datasets import MNIST
 from torchvision.transforms import transforms
+
+from src.data.components.musdb18_dataset import MUSDB18Dataset
 
 
 class MUSDB18DataModule(LightningDataModule):
@@ -48,7 +51,7 @@ class MUSDB18DataModule(LightningDataModule):
     def __init__(
         self,
         data_dir: str = "data/MUSDB18/prepared",
-        train_val_test_split: Tuple[int, int, int] = (55_000, 5_000, 10_000),
+        train_val_split: Tuple[int, int] = (55_000, 5_000),
         batch_size: int = 64,
         num_workers: int = 0,
         pin_memory: bool = False,
@@ -56,7 +59,7 @@ class MUSDB18DataModule(LightningDataModule):
         """Initialize a `MUSDB18DataModule`.
 
         :param data_dir: The data directory. Defaults to `"data/MUSDB18/prepared/"`.
-        :param train_val_test_split: The train, validation and test split. Defaults to `(55_000, 5_000, 10_000)`.
+        :param train_val_split: The train and validation split. Defaults to `(55_000, 5_000)`.
         :param batch_size: The batch size. Defaults to `64`.
         :param num_workers: The number of workers. Defaults to `0`.
         :param pin_memory: Whether to pin memory. Defaults to `False`.
@@ -117,14 +120,20 @@ class MUSDB18DataModule(LightningDataModule):
 
         # load and split datasets only if not loaded already
         if not self.data_train and not self.data_val and not self.data_test:
-            trainset = MNIST(self.hparams.data_dir, train=True, transform=self.transforms)
-            testset = MNIST(self.hparams.data_dir, train=False, transform=self.transforms)
+            trainset = MUSDB18Dataset(
+                Path(self.hparams.data_dir), train=True, transform=self.transforms
+            )
+            testset = MUSDB18Dataset(
+                Path(self.hparams.data_dir), train=False, transform=self.transforms
+            )
             dataset = ConcatDataset(datasets=[trainset, testset])
-            self.data_train, self.data_val, self.data_test = random_split(
+            self.data_train, self.data_val = random_split(
                 dataset=dataset,
                 lengths=self.hparams.train_val_test_split,
                 generator=torch.Generator().manual_seed(42),
             )
+            # TODO: take a subset
+            self.data_test = testset
 
     def train_dataloader(self) -> DataLoader[Any]:
         """Create and return the train dataloader.
