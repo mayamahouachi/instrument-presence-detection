@@ -111,6 +111,14 @@ Evaluate :
 python src/eval.py trainer=gpu ckpt_path=./logs/train/runs/\<run_timestamp\>/checkpoints/last.ckpt
 ```
 
+## Run the demo
+
+One the training is done :
+
+```sh
+python src/demo.py ckpt_path=./logs/train/runs/\<run_timestamp\>/checkpoints/last.ckpt audio=./data/\<your_favorite_song\>.mp3
+```
+
 ## Inspect results
 
 ```sh

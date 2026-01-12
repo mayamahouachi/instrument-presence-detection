@@ -3,20 +3,19 @@ import argparse
 import time
 from pathlib import Path
 from typing import List
+
+import hydra
 import librosa
+import matplotlib.pyplot as plt
 import numpy as np
+import rootutils
 import sounddevice as sd
 import soundfile as sf
 import torch
-from tqdm import tqdm
-from model import InstrumentCNN
-import matplotlib.pyplot as plt
-
-import hydra
-import rootutils
 from lightning import LightningModule, Trainer
 from lightning.pytorch.loggers import Logger
 from omegaconf import DictConfig
+from tqdm import tqdm
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
@@ -39,6 +38,7 @@ HOP_LENGTH = 256
 
 
 def logmel(y: np.ndarray) -> np.ndarray:
+    """Return the logmel of the audio."""
     S = librosa.feature.melspectrogram(
         y=y, sr=SR, n_fft=N_FFT, hop_length=HOP_LENGTH, n_mels=N_MELS, power=2.0
     )
@@ -46,8 +46,9 @@ def logmel(y: np.ndarray) -> np.ndarray:
 
 
 def live_demo(
-    y: np.ndarray, times: np.ndarray, probs_all: np.ndarray, stems: List[str], treshold: float
+    y: np.ndarray, times: np.ndarray, probs_all: np.ndarray, stems: List[str], threshold: float
 ):
+    """Stream plots along the music playing."""
 
     plt.ion()
     n_classes = len(stems)
@@ -61,7 +62,7 @@ def live_demo(
     ax.set_title("Présence des instruments")
 
     for i in range(n_classes):
-        ax.hlines(treshold, i - 0.4, i + 0.4, linestyles="dashed")  # ligne de seuil
+        ax.hlines(threshold, i - 0.4, i + 0.4, linestyles="dashed")  # ligne de seuil
 
     fig.tight_layout()
 
@@ -76,7 +77,7 @@ def live_demo(
 
         for i, b in enumerate(bars):
             b.set_height(probs[i])
-            b.set_color("tab:green" if probs[i] >= treshold else "tab:gray")
+            b.set_color("tab:green" if probs[i] >= threshold else "tab:gray")
 
         ax.set_xlabel(f"Temps : {t0:5.2f} s")
         fig.canvas.draw()
@@ -89,15 +90,14 @@ def live_demo(
 
 
 def load_model(cfg: DictConfig):
+    """Load the model checkpoint according to the hydra config."""
     log.info(f"Instantiating model <{cfg.model._target_}>")
     model: LightningModule = hydra.utils.instantiate(cfg.model)
     model.setup("test")
     return model
 
 
-@hydra.main(
-    version_base="1.3", config_path="../configs", config_name="data_analysis.yaml"
-)
+@hydra.main(version_base="1.3", config_path="../configs", config_name="demo.yaml")
 def main(cfg: DictConfig) -> None:
     """Main entry point for the demo.
 
@@ -111,8 +111,12 @@ def main(cfg: DictConfig) -> None:
     assert cfg.audio
 
     model = load_model(cfg)
+
     # WARN: HARDCODED
-    nb_stems = 3
+    stems = ["vocal", "drums", "bass"]
+    nb_stems = len(stems)
+    threshold = 0.5
+
     y, sr0 = sf.read(cfg.audio)
     if y.ndim > 1:
         y = y.mean(axis=1)
@@ -146,7 +150,7 @@ def main(cfg: DictConfig) -> None:
         probs_all[k] = probs
 
     print("Lancement de la démo...")
-    live_demo(y, times, probs_all, stems, treshold)
+    live_demo(y, times, probs_all, stems, threshold)
 
 
 if __name__ == "__main__":
