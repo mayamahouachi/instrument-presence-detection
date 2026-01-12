@@ -6,8 +6,11 @@ from torchmetrics import MaxMetric, MeanMetric
 from torchmetrics.classification.accuracy import Accuracy
 
 
-class MNISTLitModule(LightningModule):
-    """Example of a `LightningModule` for MNIST classification.
+class InstrumentCNNModule(LightningModule):
+    """Detects in each window the presence of each audio source class.
+
+    Input shape: (B, n_mels, n_frame)
+    Output shape: (B, n_classes)
 
     A `LightningModule` implements 8 key methods:
 
@@ -41,7 +44,8 @@ class MNISTLitModule(LightningModule):
 
     def __init__(
         self,
-        net: torch.nn.Module,
+        feature_extractor: torch.nn.Module,
+        classifier: torch.nn.Module,
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
         compile: bool,
@@ -58,15 +62,16 @@ class MNISTLitModule(LightningModule):
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
 
-        self.net = net
+        self.feature_extractor = feature_extractor
+        self.classifier = classifier
 
         # loss function
-        self.criterion = torch.nn.CrossEntropyLoss()
+        self.criterion = torch.nn.BCEWithLogitsLoss()
 
         # metric objects for calculating and averaging accuracy across batches
-        self.train_acc = Accuracy(task="multiclass", num_classes=10)
-        self.val_acc = Accuracy(task="multiclass", num_classes=10)
-        self.test_acc = Accuracy(task="multiclass", num_classes=10)
+        self.train_acc = Accuracy(task="multiclass", num_classes=3)
+        self.val_acc = Accuracy(task="multiclass", num_classes=3)
+        self.test_acc = Accuracy(task="multiclass", num_classes=3)
 
         # for averaging loss across batches
         self.train_loss = MeanMetric()
@@ -77,12 +82,13 @@ class MNISTLitModule(LightningModule):
         self.val_acc_best = MaxMetric()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Perform a forward pass through the model `self.net`.
+        """Perform a forward pass through the feature extractor and the classifier.
 
-        :param x: A tensor of images.
-        :return: A tensor of logits.
+        :param x: A tensor of spectrum windows. Shape (B, n_mels, n_frame)
+        :return: A tensor of logits. Shape (B, 3)
         """
-        return self.net(x)
+        hidden_features = self.feature_extractor(x)
+        return self.classifier(hidden_features)
 
     def on_train_start(self) -> None:
         """Lightning hook that is called when training begins."""
@@ -101,13 +107,13 @@ class MNISTLitModule(LightningModule):
 
         :return: A tuple containing (in order):
             - A tensor of losses.
-            - A tensor of predictions.
+            - A tensor of predictions. Bool Tensor of shape (B, 3).
             - A tensor of target labels.
         """
         x, y = batch
         logits = self.forward(x)
-        loss = self.criterion(logits, y)
-        preds = torch.argmax(logits, dim=1)
+        loss = self.criterion(logits, y.float())
+        preds = torch.sigmoid(logits) >= 0.5
         return loss, preds, y
 
     def training_step(
@@ -186,8 +192,12 @@ class MNISTLitModule(LightningModule):
 
         :param stage: Either `"fit"`, `"validate"`, `"test"`, or `"predict"`.
         """
+        if stage == "fit":
+            dummy = torch.zeros(1, 1, 64, 87)  # dummy mel spectrum
+            self.forward(dummy)
         if self.hparams.compile and stage == "fit":
-            self.net = torch.compile(self.net)
+            self.feature_extractor = torch.compile(self.feature_extractor)
+            self.classifier = torch.compile(self.classifier)
 
     def configure_optimizers(self) -> Dict[str, Any]:
         """Choose what optimizers and learning-rate schedulers to use in your optimization.
@@ -214,4 +224,4 @@ class MNISTLitModule(LightningModule):
 
 
 if __name__ == "__main__":
-    _ = MNISTLitModule(None, None, None, None)
+    _ = InstrumentCNNModule(None, None, None, None, None)

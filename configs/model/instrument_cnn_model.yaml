@@ -1,0 +1,29 @@
+_target_: src.models.instrumentcnn.InstrumentCNNModule
+
+optimizer:
+  _target_: torch.optim.AdamW
+  _partial_: true
+  lr: 3e-4
+  weight_decay: 1e-4
+
+scheduler:
+  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+  _partial_: true
+  mode: min
+  factor: 0.1
+  patience: 10
+
+feature_extractor:
+  _target_: src.models.components.cnn_feature_net.CNNFeatureNet
+  cnn1_filter_nb: 16
+  cnn2_filter_nb: 32
+  cnn3_filter_nb: 64
+
+classifier:
+  _target_: src.models.components.classifier.SimpleDenseClassifier
+  hidden_size: 128
+  dropout: 0.3
+  output_size: 3
+
+# compile model for faster training with pytorch 2.0
+compile: false

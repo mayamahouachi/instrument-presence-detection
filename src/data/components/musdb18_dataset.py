@@ -90,7 +90,7 @@ class MUSDB18Dataset(Dataset[Tuple[Tensor, Tensor]]):
                 yield inpts_per_file[indices], targets_per_file[indices]
 
         inpts, targets = zip(*gen(inpts, targets, sample_nb_per_music()))
-        self.data = np.concatenate(inpts)
+        self.data = np.concatenate(inpts)[:, np.newaxis, ...]
         self.target_data = np.concatenate(targets)
         return self
 

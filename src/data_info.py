@@ -81,6 +81,8 @@ def data_analysis(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     train_val_class_frequencies = torch.zeros((NUM_STEM_CLASSES,), dtype=torch.int32)
     test_class_freqencies = torch.zeros((NUM_STEM_CLASSES,), dtype=torch.int32)
 
+    log.info(f"Input shape: {next(iter(datamodule.train_dataloader()))[0].shape}")
+
     for _, targets in iter(datamodule.train_dataloader()):
         classes, counts = get_frequencies(targets)
         train_val_class_frequencies[classes] += counts
