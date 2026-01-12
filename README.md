@@ -111,3 +111,10 @@ Evaluate :
 python src/eval.py trainer=cpu
 python src/eval.py trainer=gpu
 ```
+
+## Inspect results
+
+```sh
+cd logs/mlflow
+mlflow ui
+```
