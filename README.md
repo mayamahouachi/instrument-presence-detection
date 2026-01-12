@@ -72,7 +72,7 @@ pre-commit install
    python build_dataset.py \
      --musdb-root ./data/MUSDB18/raw/ \
      --out-dir ./data/MUSDB18/prepared/ \
-      --sr 22050 --win-sec 1.0 --hop-sec 0.5 \
+      --sr 22050 --win-sec 1.0 --hop-sec 0.25 \
       --n-mels 64 --n-fft 1024 --mel-hop 256 \
       --ratio-thr-vocals 0.07 \
       --ratio-thr-drums 0.12 \
@@ -80,6 +80,9 @@ pre-commit install
       --min-mix-rms 1e-4 \
       --stem-abs-thr 1e-3
    ```
+
+   > Do not change the hop-sec. The current model is only set for this temporal
+   > window size.
 
 ## How to run
 
