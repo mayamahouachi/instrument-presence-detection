@@ -3,10 +3,15 @@
 from typing import Any, Dict, List, Tuple, cast
 
 import hydra
+import numpy as np
 import rootutils
 import torch
 from lightning import LightningDataModule
-from lightning.pytorch.loggers import Logger
+from lightning.pytorch.loggers import Logger, MLFlowLogger
+from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
+from mlflow.tracking.client import MlflowClient
 from omegaconf import DictConfig
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
@@ -38,16 +43,29 @@ from src.utils import (
 log = RankedLogger(__name__, rank_zero_only=True)
 
 
-def get_frequencies(targets: torch.Tensor):
+def get_frequencies(targets: torch.Tensor, encode=True):
     """Return the unique target class and their occurrences."""
-    targets = cast(torch.Tensor, targets)
-    encoding = (
-        targets
-        * (2 ** torch.arange(3, dtype=torch.int32, device=targets.device))[torch.newaxis, :]
-    ).sum(
-        dim=1
-    )  # shape (B,)
+    if encode:
+        encoding = (
+            targets
+            * (2 ** torch.arange(3, dtype=torch.int32, device=targets.device))[torch.newaxis, :]
+        ).sum(
+            dim=1
+        )  # shape (B,)
+    else:
+        encoding = targets
     return torch.unique(encoding, return_counts=True)
+
+
+def plot_histogram(logger: MLFlowLogger, frequencies: torch.Tensor, xlabel: str, name: str):
+    fig, ax = cast(Tuple[Figure, Axes], plt.subplots())
+    ax.bar(np.arange(len(frequencies)), frequencies.cpu().numpy() / frequencies.sum())
+    ax.set_xlabel(xlabel)
+    ax.set_xlabel("Frequency in the dataset")
+    ax.set_title(f"Frequency of {xlabel} in the dataset.")
+    cast(MlflowClient, logger.experiment).log_figure(
+        cast(str, logger.run_id), fig, f"plots/{name}.png"
+    )
 
 
 @task_wrapper
@@ -79,29 +97,53 @@ def data_analysis(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
     NUM_STEM_CLASSES = 8
     train_val_class_frequencies = torch.zeros((NUM_STEM_CLASSES,), dtype=torch.int32)
-    test_class_freqencies = torch.zeros((NUM_STEM_CLASSES,), dtype=torch.int32)
+    train_val_file_presence = torch.zeros(
+        (datamodule.train_file_nb,), dtype=torch.int32  # type: ignore
+    )
+    test_class_frequencies = torch.zeros((NUM_STEM_CLASSES,), dtype=torch.int32)
+    test_file_presence = torch.zeros((datamodule.test_file_nb,), dtype=torch.int32)  # type: ignore
 
-    log.info(f"Input shape: {next(iter(datamodule.train_dataloader()))[0].shape}")
+    log.info(f"Input shape: {next(iter(datamodule.train_dataloader()))[0][0].shape}")
 
-    for _, targets in iter(datamodule.train_dataloader()):
+    for _, targets, source_positions in iter(datamodule.train_dataloader()):
         classes, counts = get_frequencies(targets)
         train_val_class_frequencies[classes] += counts
+        classes, counts = get_frequencies(source_positions[:, 0], encode=False)
+        train_val_file_presence[classes] += counts
 
-    for _, targets in iter(datamodule.val_dataloader()):
+    for _, targets, source_positions in iter(datamodule.val_dataloader()):
         classes, counts = get_frequencies(targets)
         train_val_class_frequencies[classes] += counts
+        classes, counts = get_frequencies(source_positions[:, 0], encode=False)
+        train_val_file_presence[classes] += counts
+
+    mlflow_logger = cast(MLFlowLogger, logger[0])
 
     log.info(
         f"Got train/valid class distribution:\n{train_val_class_frequencies / train_val_class_frequencies.sum()}"
     )
+    plot_histogram(
+        mlflow_logger, train_val_class_frequencies, "output classes", "train_val_class_frequencies"
+    )
+    log.info(
+        f"Got train/valid file presence:\n{train_val_file_presence / train_val_file_presence.sum()}"
+    )
+    plot_histogram(mlflow_logger, train_val_file_presence, "files", "train_val_file_presence")
 
-    for _, targets in iter(datamodule.test_dataloader()):
+    for _, targets, source_positions in iter(datamodule.test_dataloader()):
         classes, counts = get_frequencies(targets)
-        test_class_freqencies[classes] += counts
+        test_class_frequencies[classes] += counts
+        classes, counts = get_frequencies(source_positions[:, 0], encode=False)
+        test_file_presence[classes] += counts
 
     log.info(
-        f"Got test class distribution:\n{test_class_freqencies / test_class_freqencies.sum()}"
+        f"Got test class distribution:\n{test_class_frequencies / test_class_frequencies.sum()}"
     )
+    log.info(f"Got test file presence:\n{test_file_presence / test_file_presence.sum()}")
+    plot_histogram(
+        mlflow_logger, test_class_frequencies, "output classes", "test_class_frequencies"
+    )
+    plot_histogram(mlflow_logger, test_file_presence, "files", "test_file_presence")
 
     return {}, object_dict
 

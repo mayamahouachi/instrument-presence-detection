@@ -2,6 +2,7 @@ from typing import Any, Dict, Tuple
 
 import torch
 from lightning import LightningModule
+from numpy.typing import NDArray
 from torchmetrics import MaxMetric, MeanMetric
 from torchmetrics.classification import MultilabelAccuracy  
 
@@ -46,8 +47,8 @@ class InstrumentCNNModule(LightningModule):
         self,
         feature_extractor: torch.nn.Module,
         classifier: torch.nn.Module,
-        optimizer: torch.optim.Optimizer,
-        scheduler: torch.optim.lr_scheduler,
+        optimizer: torch.optim.Optimizer,  # type: ignore
+        scheduler: torch.optim.lr_scheduler,  # type: ignore
         compile: bool,
     ) -> None:
         """Initialize a `MNISTLitModule`.
@@ -99,8 +100,8 @@ class InstrumentCNNModule(LightningModule):
         self.val_acc_best.reset()
 
     def model_step(
-        self, batch: Tuple[torch.Tensor, torch.Tensor]
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        self, batch: Tuple[torch.Tensor, torch.Tensor, NDArray]
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, NDArray]:
         """Perform a single model step on a batch of data.
 
         :param batch: A batch of data (a tuple) containing the input tensor of images and target labels.
@@ -110,14 +111,14 @@ class InstrumentCNNModule(LightningModule):
             - A tensor of predictions. Bool Tensor of shape (B, 3).
             - A tensor of target labels.
         """
-        x, y = batch
+        x, y, source_positions = batch
         logits = self.forward(x)
         loss = self.criterion(logits, y.float())
         preds = torch.sigmoid(logits) >= 0.5
-        return loss, preds, y
+        return loss, preds, y, source_positions
 
     def training_step(
-        self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int
+        self, batch: Tuple[torch.Tensor, torch.Tensor, NDArray], batch_idx: int
     ) -> torch.Tensor:
         """Perform a single training step on a batch of data from the training set.
 
@@ -126,7 +127,7 @@ class InstrumentCNNModule(LightningModule):
         :param batch_idx: The index of the current batch.
         :return: A tensor of losses between model predictions and targets.
         """
-        loss, preds, targets = self.model_step(batch)
+        loss, preds, targets, _ = self.model_step(batch)
 
         # update and log metrics
         self.train_loss(loss)
@@ -141,14 +142,16 @@ class InstrumentCNNModule(LightningModule):
         "Lightning hook that is called when a training epoch ends."
         pass
 
-    def validation_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
+    def validation_step(
+        self, batch: Tuple[torch.Tensor, torch.Tensor, NDArray], batch_idx: int
+    ) -> None:
         """Perform a single validation step on a batch of data from the validation set.
 
         :param batch: A batch of data (a tuple) containing the input tensor of images and target
             labels.
         :param batch_idx: The index of the current batch.
         """
-        loss, preds, targets = self.model_step(batch)
+        loss, preds, targets, _ = self.model_step(batch)
 
         # update and log metrics
         self.val_loss(loss)
@@ -164,20 +167,28 @@ class InstrumentCNNModule(LightningModule):
         # otherwise metric would be reset by lightning after each epoch
         self.log("val/acc_best", self.val_acc_best.compute(), sync_dist=True, prog_bar=True)
 
-    def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
+    def test_step(self, batch: Tuple[torch.Tensor, torch.Tensor, NDArray], batch_idx: int) -> None:
         """Perform a single test step on a batch of data from the test set.
 
         :param batch: A batch of data (a tuple) containing the input tensor of images and target
             labels.
         :param batch_idx: The index of the current batch.
         """
-        loss, preds, targets = self.model_step(batch)
+        loss, preds, targets, _ = self.model_step(batch)
 
         # update and log metrics
         self.test_loss(loss)
         self.test_acc(preds, targets)
         self.log("test/loss", self.test_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("test/acc", self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
+
+    def predict_step(
+        self, batch: Tuple[torch.Tensor, torch.Tensor, NDArray], batch_idx: int
+    ) -> Tuple[torch.Tensor, NDArray]:
+        """The complete predict step."""
+        x, _, source_positions = batch
+        preds = torch.sigmoid(self(x)) >= 0.5
+        return preds, source_positions
 
     def on_test_epoch_end(self) -> None:
         """Lightning hook that is called when a test epoch ends."""

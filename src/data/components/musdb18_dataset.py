@@ -12,11 +12,16 @@ from src.data.components.data_type import PreparedAudio
 from src.utils import sampling
 
 
-class MUSDB18Dataset(Dataset[Tuple[Tensor, Tensor]]):
+class MUSDB18Dataset(Dataset[Tuple[Tensor, Tensor, NDArray]]):
     """Call the subsample or split_with_same_distribution methods to fully load the dataset.
 
     With those methods, the balancing of the distribution of music pieces and source classes is
     respected at a maximum that depend the wanted absolute number of samples.
+
+    An item is the following tuple:
+    * mel spectrum windows: shape (1, n_mels, frame) (first dim for 1 kernel)
+    * occurring music source classes for the window: shape (3,)
+    * source position (file_nb, position_in_file): shape (2,)
     """
 
     def __init__(self, data_dir: Path, train: bool, transforms, target_transforms, seed=42):
@@ -40,15 +45,17 @@ class MUSDB18Dataset(Dataset[Tuple[Tensor, Tensor]]):
         )
         self.data: Optional[NDArray] = None
         self.target_data: Optional[NDArray] = None
+        self.source_position: Optional[NDArray] = None
         self.transforms = transforms
         self.target_transforms = target_transforms
+        self.file_number = len(self.files)
 
     def _encode_target(self, target: NDArray[np.bool_]) -> NDArray[np.int_]:
         return (target * (2 ** np.arange(3))[np.newaxis, ...]).sum(axis=1)
 
     def split_with_same_distribution(
         self, train_size: int, test_size: int
-    ) -> Tuple[Subset[Tuple[Tensor, Tensor]], Subset[Tuple[Tensor, Tensor]]]:
+    ) -> Tuple[Subset[Tuple[Tensor, Tensor, NDArray]], Subset[Tuple[Tensor, Tensor, NDArray]]]:
         """Same target class distribution in train and test subsets.
 
         The distribution of music pieces may not the same.
@@ -79,28 +86,34 @@ class MUSDB18Dataset(Dataset[Tuple[Tensor, Tensor]]):
             targets: Tuple[NDArray, ...],
             ds_sizes: Iterable[int],
         ):
-            for inpts_per_file, targets_per_file, ds_size_per_file in zip(
-                inpts, targets, ds_sizes
-            ):
+            for file_nb, (
+                inpts_per_file,
+                targets_per_file,
+                ds_size_per_file,
+            ) in enumerate(zip(inpts, targets, ds_sizes)):
                 indices = sampling.undersample(
                     self._encode_target(targets_per_file),
                     ds_size_per_file,
                     self.seed,
                 )
-                yield inpts_per_file[indices], targets_per_file[indices]
+                source_positions = np.empty((len(indices), 2), dtype=indices.dtype)
+                source_positions[:, 0] = file_nb
+                source_positions[:, 1] = indices
+                yield inpts_per_file[indices], targets_per_file[indices], source_positions
 
-        inpts, targets = zip(*gen(inpts, targets, sample_nb_per_music()))
+        inpts, targets, positions = zip(*gen(inpts, targets, sample_nb_per_music()))
         self.data = np.concatenate(inpts)[:, np.newaxis, ...]
         self.target_data = np.concatenate(targets)
+        self.source_position = np.concatenate(positions)
         return self
 
     @override
-    def __getitem__(self, index) -> Tuple[Tensor, Tensor]:
+    def __getitem__(self, index) -> Tuple[Tensor, Tensor, NDArray]:
         """Select an item (input audio spectrum, target audio source class).
 
         :return: shape (1, n_mels, frames), shape (3,)
         """
-        if self.data is None or self.target_data is None:
+        if self.data is None or self.target_data is None or self.source_position is None:
             raise Exception(
                 "You must call `undersample` or `split_with_same_distribution` method before using the dataset."
             )
@@ -108,6 +121,7 @@ class MUSDB18Dataset(Dataset[Tuple[Tensor, Tensor]]):
         return (
             self.transforms(self.data[index]),
             self.transforms(self.target_data[index]),
+            self.source_position[index],
         )
 
     def __len__(self) -> int:

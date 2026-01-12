@@ -59,7 +59,7 @@ def test_mus18db_datamodule(
     assert num_datapoints == sum(train_val_test_split)
 
     batch = next(iter(dm.train_dataloader()))
-    x, y = batch
+    x, y, _ = batch
     assert len(x) == batch_size
     assert len(y) == batch_size
     assert x.dtype == torch.float32

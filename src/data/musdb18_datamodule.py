@@ -81,6 +81,9 @@ class MUSDB18DataModule(LightningDataModule):
 
         self.batch_size_per_device = batch_size
 
+        self.train_file_nb = 0
+        self.test_file_nb = 0
+
     @property
     def num_classes(self) -> int:
         """Get the number of classes.
@@ -125,12 +128,14 @@ class MUSDB18DataModule(LightningDataModule):
                 transforms=self.transforms,
                 target_transforms=self.target_transforms,
             )
+            self.train_file_nb = trainset.file_number
             testset = MUSDB18Dataset(
                 Path(self.hparams["data_dir"]),
                 train=False,
                 transforms=self.transforms,
                 target_transforms=self.target_transforms,
             )
+            self.test_file_nb = testset.file_number
             self.data_train, self.data_val = trainset.split_with_same_distribution(
                 *self.hparams["train_val_test_split"][:2],
             )
