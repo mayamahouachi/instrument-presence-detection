@@ -1,6 +1,6 @@
 _target_: src.data.musdb18_datamodule.MUSDB18DataModule
 data_dir: ${paths.data_dir}/MUSDB18/prepared
 batch_size: 128 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)
-train_val_test_split: [55_000, 5_000, 20_000]
+train_val_test_split: [30_000, 5_000, 20_000]
 num_workers: 0
 pin_memory: False

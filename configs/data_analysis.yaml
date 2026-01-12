@@ -1,0 +1,13 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - data: musdb18 # choose datamodule with `test_dataloader()` for evaluation
+  - logger: mlflow
+  - paths: default
+  - extras: default
+  - hydra: default
+
+task_name: "eval"
+
+tags: ["dev"]
