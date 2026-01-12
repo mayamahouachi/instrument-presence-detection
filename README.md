@@ -64,7 +64,7 @@ pre-commit install
 ### Install the dataset
 
 1. Be sure to have two directories `train` and `test` with `.stem.mp4` files
-   (the raw MUSDB18) in `./data/MUSDB18/raw/`
+   (the raw [MUSDB18](https://zenodo.org/record/1117372)) in `./data/MUSDB18/raw/`
 
 2. In your environment, run the `build-dataset.py` script:
 
