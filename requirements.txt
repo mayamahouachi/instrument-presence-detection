@@ -26,3 +26,4 @@ pytest          # tests
 # --------- music libs --------- #
 librosa
 musdb
+sounddevice
