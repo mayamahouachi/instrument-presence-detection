@@ -1,0 +1,18 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - model: instrument_cnn_model
+  - paths: default
+  - extras: default
+  - hydra: default
+
+task_name: "demo"
+
+tags: ["dev"]
+
+# passing checkpoint path is necessary for evaluation
+ckpt_path: ???
+
+# passing audio file is required
+audio: ???
