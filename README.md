@@ -104,3 +104,10 @@ You can override any parameter from command line like this
 ```bash
 python src/train.py trainer.max_epochs=20 data.batch_size=64
 ```
+
+Evaluate :
+
+```sh
+python src/eval.py trainer=cpu
+python src/eval.py trainer=gpu
+```
