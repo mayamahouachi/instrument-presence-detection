@@ -192,9 +192,8 @@ class InstrumentCNNModule(LightningModule):
 
         :param stage: Either `"fit"`, `"validate"`, `"test"`, or `"predict"`.
         """
-        if stage == "fit":
-            dummy = torch.zeros(1, 1, 64, 87)  # dummy mel spectrum
-            self.forward(dummy)
+        dummy = torch.zeros(1, 1, 64, 87)  # dummy mel spectrum
+        self.forward(dummy)
         if self.hparams.compile and stage == "fit":
             self.feature_extractor = torch.compile(self.feature_extractor)
             self.classifier = torch.compile(self.classifier)

@@ -108,8 +108,7 @@ python src/train.py trainer.max_epochs=20 data.batch_size=64
 Evaluate :
 
 ```sh
-python src/eval.py trainer=cpu
-python src/eval.py trainer=gpu
+python src/eval.py trainer=gpu ckpt_path=./logs/train/runs/\<run_timestamp\>/checkpoints/last.ckpt
 ```
 
 ## Inspect results
