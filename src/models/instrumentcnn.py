@@ -3,7 +3,7 @@ from typing import Any, Dict, Tuple
 import torch
 from lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
-from torchmetrics.classification.accuracy import Accuracy
+from torchmetrics.classification import MultilabelAccuracy  
 
 
 class InstrumentCNNModule(LightningModule):
@@ -69,9 +69,9 @@ class InstrumentCNNModule(LightningModule):
         self.criterion = torch.nn.BCEWithLogitsLoss()
 
         # metric objects for calculating and averaging accuracy across batches
-        self.train_acc = Accuracy(task="multiclass", num_classes=3)
-        self.val_acc = Accuracy(task="multiclass", num_classes=3)
-        self.test_acc = Accuracy(task="multiclass", num_classes=3)
+        self.train_acc = MultilabelAccuracy(num_labels=3)
+        self.val_acc = MultilabelAccuracy(num_labels=3)
+        self.test_acc = MultilabelAccuracy(num_labels=3)
 
         # for averaging loss across batches
         self.train_loss = MeanMetric()
@@ -192,7 +192,7 @@ class InstrumentCNNModule(LightningModule):
 
         :param stage: Either `"fit"`, `"validate"`, `"test"`, or `"predict"`.
         """
-        dummy = torch.zeros(1, 1, 64, 87)  # dummy mel spectrum
+        dummy = torch.zeros(1, 1, 64, 22)  # dummy mel spectrum
         self.forward(dummy)
         if self.hparams.compile and stage == "fit":
             self.feature_extractor = torch.compile(self.feature_extractor)
