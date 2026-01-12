@@ -8,6 +8,6 @@ defaults:
   - extras: default
   - hydra: default
 
-task_name: "eval"
+task_name: "data_analysis"
 
 tags: ["dev"]
