@@ -1,12 +1,28 @@
 from pathlib import Path
-from typing import Tuple, cast
+from typing import List, Tuple, cast
 
+import numpy as np
 import pytest
 import torch
 
 from src.data.musdb18_datamodule import MUSDB18DataModule
+from src.utils import sampling
 
 
+@pytest.mark.parametrize(
+    ["file_sizes", "wanted_size_per_file"],
+    [
+        ([18, 18, 3, 20], 6),
+        ([15, 7, 3, 20], 8),
+    ],
+)
+def test_size_splitting(file_sizes: List[int], wanted_size_per_file: int):
+    results = sampling.split_at_maximum(file_sizes, wanted_size_per_file)
+    assert results.sum() == wanted_size_per_file * len(file_sizes)
+    assert np.all(results <= np.array(file_sizes))
+
+
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ["batch_size", "train_val_test_balanced_nb"],
     [(32, (10, 5, 7)), (128, (20, 10, 15))],
@@ -47,4 +63,4 @@ def test_mus18db_datamodule(
     assert len(x) == batch_size
     assert len(y) == batch_size
     assert x.dtype == torch.float32
-    assert y.dtype == torch.int64
+    assert y.dtype == torch.int8

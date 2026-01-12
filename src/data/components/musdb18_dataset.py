@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple, cast
+from typing import Iterable, List, Optional, Sequence, Tuple, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -67,18 +67,29 @@ class MUSDB18Dataset(Dataset[Tuple[Tensor, Tensor]]):
         class representatin for each musical piece."""
         inpts, targets = self.ready_data()
         nb_files = len(inpts)
-        sample_nb_per_music = dataset_size // nb_files
 
-        def gen(inpts: Tuple[NDArray, ...], targets: Tuple[NDArray, ...]):
-            for inpts_per_file, targets_per_file in zip(inpts, targets):
+        def sample_nb_per_music():
+            quotient = dataset_size // nb_files
+            return sampling.split_at_maximum(
+                [len(target) for target in targets], quotient
+            ).tolist()
+
+        def gen(
+            inpts: Tuple[NDArray, ...],
+            targets: Tuple[NDArray, ...],
+            ds_sizes: Iterable[int],
+        ):
+            for inpts_per_file, targets_per_file, ds_size_per_file in zip(
+                inpts, targets, ds_sizes
+            ):
                 indices = sampling.undersample(
                     self._encode_target(targets_per_file),
-                    sample_nb_per_music,
+                    ds_size_per_file,
                     self.seed,
                 )
                 yield inpts_per_file[indices], targets_per_file[indices]
 
-        inpts, targets = zip(*gen(inpts, targets))
+        inpts, targets = zip(*gen(inpts, targets, sample_nb_per_music()))
         self.data = np.concatenate(inpts)
         self.target_data = np.concatenate(targets)
         return self
@@ -101,4 +112,8 @@ class MUSDB18Dataset(Dataset[Tuple[Tensor, Tensor]]):
 
     def __len__(self) -> int:
         """Return the number of samples in the given dataset."""
-        raise NotImplementedError()
+        if self.data is None or self.target_data is None:
+            raise Exception(
+                "You must call `undersample` or `split_with_same_distribution` method before using the dataset."
+            )
+        return len(self.data)
