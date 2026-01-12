@@ -2,7 +2,7 @@
 
 defaults:
   - _self_
-  - data: mnist # choose datamodule with `test_dataloader()` for evaluation
+  - data: musdb18 # choose datamodule with `test_dataloader()` for evaluation
   - model: mnist
   - logger: mlflow
   - trainer: default
