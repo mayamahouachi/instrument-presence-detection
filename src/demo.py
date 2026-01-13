@@ -13,6 +13,7 @@ import torch
 from lightning import LightningModule
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from numpy.typing import NDArray
 from omegaconf import DictConfig
 from tqdm import tqdm
 
@@ -28,6 +29,18 @@ HOP_SEC = 0.25
 N_MELS = 64
 N_FFT = 1024
 HOP_LENGTH = 256
+
+
+def to_output_device_sr(y: NDArray, sr: int) -> Tuple[NDArray, int]:
+    """Resample the audio ndarray of given sr in the device's output sr."""
+    out_device = cast(dict, sd.query_devices(kind="output"))
+    out_device_sr = int(out_device["default_samplerate"])
+
+    if sr != out_device_sr:
+        resampled = librosa.resample(y, orig_sr=sr, target_sr=out_device_sr)
+    else:
+        resampled = y
+    return resampled, out_device_sr
 
 
 def logmel(y: np.ndarray) -> np.ndarray:
@@ -67,7 +80,8 @@ def live_demo(y, times: np.ndarray, probs_all: np.ndarray, stems, threshold: flo
 
     fig.tight_layout()
 
-    sd.play(y, SR, blocking=False)
+    resampled, out_sr = to_output_device_sr(y, SR)
+    sd.play(resampled, out_sr, blocking=False)
     start = time.time()
 
     for k, t0 in enumerate(times):
