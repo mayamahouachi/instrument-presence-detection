@@ -131,3 +131,6 @@ python src/demo.py \
 cd logs/mlflow
 mlflow ui
 ```
+
+The plots of evaluation and training are readable in the Artifacts section of
+each experiment.
