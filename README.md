@@ -61,7 +61,7 @@ pip install pre-commit
 pre-commit install
 ```
 
-### Install the dataset
+### build the dataset
 
 1. Be sure to have two directories `train` and `test` with `.stem.mp4` files
    (the raw [MUSDB18](https://zenodo.org/record/1117372)) in `./data/MUSDB18/raw/`
@@ -78,6 +78,13 @@ pre-commit install
 
    > Do not change the hop-sec. The current model is only set for this temporal
    > window size.
+
+### explore dataset 
+
+Check the notebook: notebooks/eda_musdb.ipynb
+
+You will find inspection of raw MUSDB18 stems and analysis of the generated segment-level dataset
+
 
 ## How to run
 
