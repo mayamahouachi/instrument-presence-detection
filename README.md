@@ -69,16 +69,11 @@ pre-commit install
 2. In your environment, run the `build-dataset.py` script:
 
    ```sh
-   python build_dataset.py \
-     --musdb-root ./data/MUSDB18/raw/ \
-     --out-dir ./data/MUSDB18/prepared/ \
-      --sr 22050 --win-sec 1.0 --hop-sec 0.25 \
-      --n-mels 64 --n-fft 1024 --mel-hop 256 \
-      --ratio-thr-vocals 0.07 \
-      --ratio-thr-drums 0.12 \
-      --ratio-thr-bass 0.12 \
-      --min-mix-rms 1e-4 \
-      --stem-abs-thr 1e-3
+   python build_dataset.py --musdb-root ./data/MUSDB18/raw/ \
+    --out-dir ./data/MUSDB18/prepared/ \
+    --win-sec 0.25 --hop-sec 0.25 \
+    --ratio-thr-vocals 0.15 --ratio-thr-drums 0.25 \
+    --ratio-thr-bass 0.3 --stem-abs-thr 0.002 --min-mix-rms 1e-4
    ```
 
    > Do not change the hop-sec. The current model is only set for this temporal
