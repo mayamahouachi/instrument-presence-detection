@@ -76,15 +76,14 @@ pre-commit install
     --ratio-thr-bass 0.3 --stem-abs-thr 0.002 --min-mix-rms 1e-4
    ```
 
-   > Do not change the hop-sec. The current model is only set for this temporal
-   > window size.
+   > Do not change the hop-sec nor the win-sev. The current model is only set
+   > for this temporal window size.
 
-### explore dataset 
+### explore dataset
 
 Check the notebook: notebooks/eda_musdb.ipynb
 
 You will find inspection of raw MUSDB18 stems and analysis of the generated segment-level dataset
-
 
 ## How to run
 
@@ -114,6 +113,16 @@ Evaluate :
 
 ```sh
 python src/eval.py trainer=gpu ckpt_path=./logs/train/runs/\<run_timestamp\>/checkpoints/last.ckpt
+```
+
+## Demonstration on an audio
+
+Stream an .mp3 or .wav audio with the trained model checkpoint you want:
+
+```sh
+python src/demo.py \
+  ckpt_path="./logs/train/runs/<run_timestamp>/checkpoints/last.ckpt" \
+  audio=/path/to/your_audio.mp3
 ```
 
 ## Inspect results

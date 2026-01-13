@@ -1,15 +1,26 @@
 # demo.py
-import argparse
 import time
-from pathlib import Path
+from typing import Tuple, cast
+
+import hydra
 import librosa
+import matplotlib.pyplot as plt
 import numpy as np
+import rootutils
 import sounddevice as sd
 import soundfile as sf
 import torch
+from lightning import LightningModule
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
+from omegaconf import DictConfig
 from tqdm import tqdm
-from model import InstrumentCNN
-import matplotlib.pyplot as plt
+
+rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
+
+from src.utils import RankedLogger, extras
+
+log = RankedLogger(__name__, rank_zero_only=True)
 
 SR = 22050
 WIN_SEC = 0.25
@@ -18,27 +29,33 @@ N_MELS = 64
 N_FFT = 1024
 HOP_LENGTH = 256
 
+
 def logmel(y: np.ndarray) -> np.ndarray:
-    S = librosa.feature.melspectrogram(y=y,sr=SR,n_fft=N_FFT,hop_length=HOP_LENGTH,n_mels=N_MELS,power=2.0)
+    """Return the logmel of the audio."""
+    S = librosa.feature.melspectrogram(
+        y=y, sr=SR, n_fft=N_FFT, hop_length=HOP_LENGTH, n_mels=N_MELS, power=2.0
+    )
     return librosa.power_to_db(S, ref=np.max).astype(np.float32)
 
 
-def load_model(model_path: Path, device: torch.device):
-    ckpt = torch.load(model_path, map_location=device, weights_only=False)
-    stems = ckpt.get("stems", ["vocals", "drums", "bass"])
-    threshold = float(ckpt.get("threshold", 0.5))
-    model = InstrumentCNN(n_classes=len(stems))
-    model.load_state_dict(ckpt["model_state"])
-    model.to(device).eval()
+def load_model(cfg: DictConfig):
+    """Load the model checkpoint according to the hydra config."""
+    log.info(f"Instantiating model <{cfg.model._target_}>")
+    model: LightningModule = hydra.utils.instantiate(cfg.model)
+    # WARN: hardcoded
+    stems = ["vocals", "drums", "bass"]
+    threshold = 0.5
+    model.setup("test")
     return model, stems, threshold
 
 
-def live_demo(y, times: np.ndarray,probs_all: np.ndarray, stems, threshold: float):
+def live_demo(y, times: np.ndarray, probs_all: np.ndarray, stems, threshold: float):
+    """Stream plots along the music playing."""
 
     plt.ion()
     n_classes = len(stems)
 
-    fig, ax = plt.subplots(figsize=(6, 3))
+    fig, ax = cast(Tuple[Figure, Axes], plt.subplots(figsize=(6, 3)))
     x = np.arange(n_classes)
     bars = ax.bar(x, probs_all[0], tick_label=stems)
     ax.set_ylim(0, 1)
@@ -73,20 +90,24 @@ def live_demo(y, times: np.ndarray,probs_all: np.ndarray, stems, threshold: floa
     plt.show()
 
 
-def main():
-    parser = argparse.ArgumentParser( description="Démo : détection d'instruments en temps réel sur un extrait audio.")
-    parser.add_argument("--audio", required=True, help="Chemin vers le fichier audio")
-    parser.add_argument("--model",required=True, help="Chemin vers le modèle .ckpt")
-    args = parser.parse_args()
+@hydra.main(version_base="1.3", config_path="../configs", config_name="demo.yaml")
+def main(cfg: DictConfig) -> None:
+    """Main entry point for the demo.
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print("Device :", device)
+    :param cfg: DictConfig configuration composed by Hydra.
+    """
+    # apply extra utilities
+    # (e.g. ask for tags if none are provided in cfg, print cfg tree, etc.)
+    extras(cfg)
 
-    model, stems, threshold = load_model(Path(args.model), device)
+    assert cfg.ckpt_path
+    assert cfg.audio
+
+    model, stems, threshold = load_model(cfg)
     print("Classes :", stems)
     print(f"Seuil global : {threshold:.2f}\n")
 
-    y, sr0 = sf.read(args.audio)
+    y, sr0 = sf.read(cfg.audio)
     if y.ndim > 1:
         y = y.mean(axis=1)
     if sr0 != SR:
@@ -105,12 +126,12 @@ def main():
     print("Pré-calcul des prédictions...")
     for k in tqdm(range(n_steps), desc="Inference", leave=False):
         s = k * hop
-        seg = y[s:s + win]
+        seg = y[s : s + win]
         if len(seg) < win:
             seg = np.pad(seg, (0, win - len(seg)))
 
-        X = logmel(seg) # (n_mels, frames)
-        xt = torch.from_numpy(X)[None, None].to(device)  # (1,1,n_mels,frames)
+        X = logmel(seg)  # (n_mels, frames)
+        xt = torch.from_numpy(X)[None, None].to(model.device)  # (1,1,n_mels,frames)
 
         with torch.no_grad():
             logits = model(xt)
