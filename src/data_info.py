@@ -115,14 +115,8 @@ def data_analysis(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
     mlflow_logger = cast(MLFlowLogger, logger[0])
 
-    log.info(
-        f"Got train/valid class distribution:\n{train_val_class_frequencies / train_val_class_frequencies.sum()}"
-    )
     plot_histogram(
         mlflow_logger, train_val_class_frequencies, "output classes", "train_val_class_frequencies"
-    )
-    log.info(
-        f"Got train/valid file presence:\n{train_val_file_presence / train_val_file_presence.sum()}"
     )
     plot_histogram(mlflow_logger, train_val_file_presence, "files", "train_val_file_presence")
 
@@ -132,10 +126,6 @@ def data_analysis(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         classes, counts = get_frequencies(source_positions[:, 0], encode=False)
         test_file_presence[classes] += counts
 
-    log.info(
-        f"Got test class distribution:\n{test_class_frequencies / test_class_frequencies.sum()}"
-    )
-    log.info(f"Got test file presence:\n{test_file_presence / test_file_presence.sum()}")
     plot_histogram(
         mlflow_logger, test_class_frequencies, "output classes", "test_class_frequencies"
     )

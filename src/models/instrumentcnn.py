@@ -1,7 +1,9 @@
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, cast
 
 import torch
 from lightning import LightningModule
+from lightning.pytorch.loggers import MLFlowLogger
+from mlflow.tracking import MlflowClient
 from numpy.typing import NDArray
 from torchmetrics import MaxMetric, MeanMetric
 from torchmetrics.classification import MulticlassConfusionMatrix, MultilabelAccuracy
@@ -202,12 +204,14 @@ class InstrumentCNNModule(LightningModule):
         """Lightning hook that is called when a test epoch ends."""
         # compute the confusion matrix
         confmat = self.test_confmat.compute()
-        fig = plot_confusion_matrix(confmat)
-        self.logger.experiment.log_figure(
-            run_id=self.logger.run_id,
-            figure=fig,
-            artifact_file="plots/confusion_matrix.png",
-        )
+        logger = cast(MLFlowLogger, self.logger)
+        if logger.run_id is not None:
+            fig = plot_confusion_matrix(confmat, [f"{n:03b}" for n in range(8)])
+            cast(MlflowClient, logger.experiment).log_figure(
+                run_id=logger.run_id,
+                figure=fig,
+                artifact_file="plots/confusion_matrix.png",
+            )
         self.test_confmat.reset()
 
     def setup(self, stage: str) -> None:
