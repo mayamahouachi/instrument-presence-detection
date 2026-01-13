@@ -1,22 +1,16 @@
+# demo.py
 import argparse
 import time
-import os, sys
 from pathlib import Path
-
 import librosa
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
 import torch
-import matplotlib.pyplot as plt
 from tqdm import tqdm
-import hydra
-from hydra import initialize, compose
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.append(str(ROOT))
-os.environ["PYTHONPATH"] = str(ROOT)
+from model import InstrumentCNN
+import matplotlib.pyplot as plt
 
-# Same params as dataset 
 SR = 22050
 WIN_SEC = 0.25
 HOP_SEC = 0.25
@@ -24,37 +18,37 @@ N_MELS = 64
 N_FFT = 1024
 HOP_LENGTH = 256
 
-STEMS = ["vocals", "drums", "bass"]
-THRESHOLD = 0.5
-COLORS = ["tab:orange", "tab:blue", "tab:green"]
-
-
 def logmel(y: np.ndarray) -> np.ndarray:
     S = librosa.feature.melspectrogram(y=y,sr=SR,n_fft=N_FFT,hop_length=HOP_LENGTH,n_mels=N_MELS,power=2.0)
     return librosa.power_to_db(S, ref=np.max).astype(np.float32)
 
 
-def load_model(ckpt_path: Path, device: torch.device):
-    ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
-    with initialize(config_path="../configs", version_base="1.3"):
-        cfg = compose(config_name="eval", overrides=[f"ckpt_path={ckpt_path}"])
-
-    model = hydra.utils.instantiate(cfg.model)
-    model.load_state_dict(ckpt["state_dict"])
+def load_model(model_path: Path, device: torch.device):
+    ckpt = torch.load(model_path, map_location=device, weights_only=False)
+    stems = ckpt.get("stems", ["vocals", "drums", "bass"])
+    threshold = float(ckpt.get("threshold", 0.5))
+    model = InstrumentCNN(n_classes=len(stems))
+    model.load_state_dict(ckpt["model_state"])
     model.to(device).eval()
-    return model
+    return model, stems, threshold
 
 
-def live_demo(y, times, probs_all):
+def live_demo(y, times: np.ndarray,probs_all: np.ndarray, stems, threshold: float):
+
     plt.ion()
-    fig, ax = plt.subplots(figsize=(7, 4))
-    x = np.arange(len(STEMS))
-    bars = ax.bar(x, probs_all[0], tick_label=STEMS)
-    ax.set_ylim(0, 1)
-    ax.set_ylabel("Probability")
+    n_classes = len(stems)
 
-    for i in range(len(STEMS)):
-        ax.hlines(THRESHOLD, i - 0.4, i + 0.4, linestyles="dashed")
+    fig, ax = plt.subplots(figsize=(6, 3))
+    x = np.arange(n_classes)
+    bars = ax.bar(x, probs_all[0], tick_label=stems)
+    ax.set_ylim(0, 1)
+    ax.set_ylabel("Probabilité")
+    ax.set_title("Présence des instruments")
+
+    for i in range(n_classes):
+        ax.hlines(threshold, i - 0.4, i + 0.4, linestyles="dashed")  # ligne de seuil
+
+    fig.tight_layout()
 
     sd.play(y, SR, blocking=False)
     start = time.time()
@@ -64,21 +58,12 @@ def live_demo(y, times, probs_all):
             time.sleep(0.002)
 
         probs = probs_all[k]
-        best = np.argmax(probs)
 
-        print(f"[{t0:5.2f}s] vocals={probs[0]:.3f} drums={probs[1]:.3f} bass={probs[2]:.3f} --> Dominant: {STEMS[best].upper()}")
-
-        # Update bars
         for i, b in enumerate(bars):
             b.set_height(probs[i])
-            if probs[i] >= THRESHOLD:
-                b.set_color(COLORS[i])
-            else:
-                b.set_color("lightgray")
+            b.set_color("tab:green" if probs[i] >= threshold else "tab:gray")
 
-
-        ax.set_title(f"{t0:5.2f}s  {STEMS[best].upper()} ")
-        ax.set_xlabel("Instruments Detected")
+        ax.set_xlabel(f"Temps : {t0:5.2f} s")
         fig.canvas.draw()
         fig.canvas.flush_events()
         plt.pause(0.001)
@@ -89,19 +74,18 @@ def live_demo(y, times, probs_all):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Live Music Instrument Detection Demo")
-    parser.add_argument("--audio", required=True, help="Chemin vers le fichier audio (.wav)")
-    parser.add_argument("--ckpt", required=True, help="Chemin vers le modèle .ckpt")
+    parser = argparse.ArgumentParser( description="Démo : détection d'instruments en temps réel sur un extrait audio.")
+    parser.add_argument("--audio", required=True, help="Chemin vers le fichier audio")
+    parser.add_argument("--model",required=True, help="Chemin vers le modèle .ckpt")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print("\n Device utilisé :", device)
+    print("Device :", device)
 
-    # Load model
-    model = load_model(Path(args.ckpt), device)
-    print(" Modèle chargé ! Classes :", STEMS, "\n")
+    model, stems, threshold = load_model(Path(args.model), device)
+    print("Classes :", stems)
+    print(f"Seuil global : {threshold:.2f}\n")
 
-    # Load audio
     y, sr0 = sf.read(args.audio)
     if y.ndim > 1:
         y = y.mean(axis=1)
@@ -115,24 +99,27 @@ def main():
 
     n_steps = 1 + (len(y) - win) // hop
     times = np.array([k * HOP_SEC for k in range(n_steps)], dtype=np.float32)
-    probs_all = np.zeros((n_steps, len(STEMS)), dtype=np.float32)
 
-    print(" Pré-calcul des prédictions...\n")
-    for k in tqdm(range(n_steps), desc="Inference"):
+    probs_all = np.zeros((n_steps, len(stems)), dtype=np.float32)
+
+    print("Pré-calcul des prédictions...")
+    for k in tqdm(range(n_steps), desc="Inference", leave=False):
         s = k * hop
-        seg = y[s : s + win]
+        seg = y[s:s + win]
         if len(seg) < win:
             seg = np.pad(seg, (0, win - len(seg)))
 
-        X = logmel(seg)
-        xt = torch.from_numpy(X)[None, None].to(device)
+        X = logmel(seg) # (n_mels, frames)
+        xt = torch.from_numpy(X)[None, None].to(device)  # (1,1,n_mels,frames)
 
         with torch.no_grad():
-            probs = torch.sigmoid(model(xt)).cpu().numpy()[0]
+            logits = model(xt)
+            probs = torch.sigmoid(logits).squeeze(0).cpu().numpy()
+
         probs_all[k] = probs
 
-    print("Lancement de la démo en temps réel !\n")
-    live_demo(y, times, probs_all)
+    print("Lancement de la démo...")
+    live_demo(y, times, probs_all, stems, threshold)
 
 
 if __name__ == "__main__":
