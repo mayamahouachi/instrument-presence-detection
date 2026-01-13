@@ -39,6 +39,7 @@ from src.utils import (
     log_hyperparameters,
     task_wrapper,
 )
+from src.utils.to_class import to_one_integer_class
 
 log = RankedLogger(__name__, rank_zero_only=True)
 
@@ -46,12 +47,7 @@ log = RankedLogger(__name__, rank_zero_only=True)
 def get_frequencies(targets: torch.Tensor, encode=True):
     """Return the unique target class and their occurrences."""
     if encode:
-        encoding = (
-            targets
-            * (2 ** torch.arange(3, dtype=torch.int32, device=targets.device))[torch.newaxis, :]
-        ).sum(
-            dim=1
-        )  # shape (B,)
+        encoding = to_one_integer_class(targets)  # shape (B,)
     else:
         encoding = targets
     return torch.unique(encoding, return_counts=True)

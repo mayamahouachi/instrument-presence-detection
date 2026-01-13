@@ -4,12 +4,13 @@ from typing import Iterable, List, Optional, Sequence, Tuple, cast
 import numpy as np
 from numpy.typing import NDArray
 from sklearn.model_selection import train_test_split
-from torch import Tensor
+from torch import Tensor, tensor
 from torch.utils.data import Dataset, Subset
 from typing_extensions import override
 
 from src.data.components.data_type import PreparedAudio
 from src.utils import sampling
+from src.utils.to_class import to_one_integer_class
 
 
 class MUSDB18Dataset(Dataset[Tuple[Tensor, Tensor, NDArray]]):
@@ -51,7 +52,7 @@ class MUSDB18Dataset(Dataset[Tuple[Tensor, Tensor, NDArray]]):
         self.file_number = len(self.files)
 
     def _encode_target(self, target: NDArray[np.bool_]) -> NDArray[np.int_]:
-        return (target * (2 ** np.arange(3))[np.newaxis, ...]).sum(axis=1)
+        return to_one_integer_class(tensor(target, device="cpu")).numpy()
 
     def split_with_same_distribution(
         self, train_size: int, test_size: int

@@ -4,7 +4,10 @@ import torch
 from lightning import LightningModule
 from numpy.typing import NDArray
 from torchmetrics import MaxMetric, MeanMetric
-from torchmetrics.classification import MultilabelAccuracy  
+from torchmetrics.classification import MulticlassConfusionMatrix, MultilabelAccuracy
+
+from src.utils.conf_mat import plot_confusion_matrix
+from src.utils.to_class import to_one_integer_class
 
 
 class InstrumentCNNModule(LightningModule):
@@ -73,6 +76,9 @@ class InstrumentCNNModule(LightningModule):
         self.train_acc = MultilabelAccuracy(num_labels=3)
         self.val_acc = MultilabelAccuracy(num_labels=3)
         self.test_acc = MultilabelAccuracy(num_labels=3)
+
+        # metric for testing analysis : ConfusionMatrix
+        self.test_confmat = MulticlassConfusionMatrix(num_classes=8)
 
         # for averaging loss across batches
         self.train_loss = MeanMetric()
@@ -182,6 +188,8 @@ class InstrumentCNNModule(LightningModule):
         self.log("test/loss", self.test_loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("test/acc", self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
 
+        self.test_confmat.update(to_one_integer_class(preds), to_one_integer_class(targets))
+
     def predict_step(
         self, batch: Tuple[torch.Tensor, torch.Tensor, NDArray], batch_idx: int
     ) -> Tuple[torch.Tensor, NDArray]:
@@ -192,7 +200,15 @@ class InstrumentCNNModule(LightningModule):
 
     def on_test_epoch_end(self) -> None:
         """Lightning hook that is called when a test epoch ends."""
-        pass
+        # compute the confusion matrix
+        confmat = self.test_confmat.compute()
+        fig = plot_confusion_matrix(confmat)
+        self.logger.experiment.log_figure(
+            run_id=self.logger.run_id,
+            figure=fig,
+            artifact_file="plots/confusion_matrix.png",
+        )
+        self.test_confmat.reset()
 
     def setup(self, stage: str) -> None:
         """Lightning hook that is called at the beginning of fit (train + validate), validate,
